@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Genomics ML Pipeline</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Three.js for 3D visualization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Prevent scrolling of the whole page */
+        }
+        #visualization-container {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        #visualization-container:active {
+            cursor: grabbing;
+        }
+        .pipeline-step {
+            transition: all 0.3s ease-in-out;
+            border-left: 4px solid #4A5568; /* gray-700 */
+        }
+        .pipeline-step.active {
+            border-left-color: #48BB78; /* green-500 */
+            background-color: #2D3748; /* gray-800 */
+        }
+        .pipeline-step.completed {
+            border-left-color: #3182CE; /* blue-500 */
+        }
+        .btn {
+            transition: all 0.2s ease;
+        }
+        .loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #3498db; /* Blue */
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Style the file input button */
+        .file-input-btn {
+            cursor: pointer;
+            display: inline-block;
+            text-align: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white">
+
+    <div class="flex h-screen">
+        <!-- Left Panel: Controls & Pipeline -->
+        <div class="w-full lg:w-1/3 xl:w-1/4 p-6 bg-gray-800 shadow-2xl overflow-y-auto">
+            <div class="flex items-center mb-6">
+                <svg class="w-8 h-8 mr-3 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M12 6V3m0 18v-3M5.636 5.636l-1.414-1.414m14.142 14.142l-1.414-1.414M18.364 5.636l1.414-1.414M5.636 18.364l1.414-1.414"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12a3 3 0 100-6 3 3 0 000 6z"></path></svg>
+                <h1 class="text-2xl font-bold text-white">Genomics ML Pipeline</h1>
+            </div>
+            <p class="text-gray-400 mb-8">An interactive demo of clustering gene expression data, inspired by the ML pipeline guide.</p>
+
+            <!-- Pipeline Steps -->
+            <div id="pipeline-container" class="space-y-4">
+                <!-- Step 1: Data Acquisition -->
+                <div id="step-1" class="pipeline-step active p-4 rounded-lg bg-gray-700/50">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <span class="bg-blue-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">1</span>
+                        Data Acquisition
+                    </h2>
+                    <p class="text-gray-400 text-sm my-2">Upload your gene expression CSV file. The file should have gene names in the first column and expression values in the subsequent columns.</p>
+                    <label for="file-upload" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg btn file-input-btn">
+                        Upload Gene Data CSV
+                    </label>
+                    <input type="file" id="file-upload" class="hidden" accept=".csv">
+                    <div id="status-1" class="text-sm text-green-400 mt-2 hidden"></div>
+                </div>
+
+                <!-- Step 2: Preprocessing -->
+                <div id="step-2" class="pipeline-step p-4 rounded-lg bg-gray-700/50">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <span class="bg-blue-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">2</span>
+                        Preprocessing
+                    </h2>
+                    <p class="text-gray-400 text-sm my-2">Normalize the data to ensure each gene's expression profile has a mean of 0 and a standard deviation of 1. This is crucial for distance-based algorithms.</p>
+                    <div id="status-2" class="text-sm text-yellow-400 mt-2">Waiting for data...</div>
+                </div>
+
+                <!-- Step 3: Model Training (Clustering) -->
+                <div id="step-3" class="pipeline-step p-4 rounded-lg bg-gray-700/50">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <span class="bg-blue-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">3</span>
+                        K-Means Clustering
+                    </h2>
+                    <p class="text-gray-400 text-sm my-2">Run the K-Means algorithm to group genes with similar expression patterns into clusters.</p>
+                    <div class="my-3">
+                        <label for="k-value" class="block text-sm font-medium text-gray-300">Number of Clusters (k):</label>
+                        <input type="number" id="k-value" value="5" min="2" max="20" class="mt-1 block w-full bg-gray-800 border border-gray-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <button id="run-ml-btn" class="w-full bg-gray-600 text-white font-bold py-2 px-4 rounded-lg btn" disabled>
+                        Run Clustering
+                    </button>
+                    <div id="status-3" class="text-sm text-green-400 mt-2 hidden"></div>
+                </div>
+
+                <!-- Step 4: Visualization & Interpretation -->
+                <div id="step-4" class="pipeline-step p-4 rounded-lg bg-gray-700/50">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <span class="bg-blue-500 text-white rounded-full h-6 w-6 text-sm flex items-center justify-center mr-3">4</span>
+                        3D Visualization
+                    </h2>
+                    <p class="text-gray-400 text-sm my-2">The clustered genes are visualized in 3D space. Each point is a gene, and its color represents its assigned cluster. Rotate the model with your mouse.</p>
+                    <div id="cluster-results" class="mt-2 text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: 3D Visualization -->
+        <div id="visualization-container" class="flex-1">
+            <!-- Three.js canvas will be inserted here -->
+        </div>
+
+    </div>
+
+    <script type="module">
+        // --- Global State ---
+        let rawGeneData = [];
+        let scaledGeneData = [];
+        let scene, camera, renderer, controls;
+        let genePoints = null;
+        let dnaHelix = null;
+
+        // --- UI Elements ---
+        const fileUploadInput = document.getElementById('file-upload');
+        const runMlBtn = document.getElementById('run-ml-btn');
+        const kValueInput = document.getElementById('k-value');
+        const visualizationContainer = document.getElementById('visualization-container');
+        const clusterResultsDiv = document.getElementById('cluster-results');
+
+        // --- 3D Visualization Setup ---
+        function init3D() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111827); // gray-900
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, visualizationContainer.clientWidth / visualizationContainer.clientHeight, 0.1, 1000);
+            camera.position.z = 20;
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(visualizationContainer.clientWidth, visualizationContainer.clientHeight);
+            visualizationContainer.appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Controls
+            initControls();
+
+            // Initial DNA Helix
+            dnaHelix = createDNAHelix();
+            scene.add(dnaHelix);
+
+            // Animation Loop
+            animate();
+
+            // Handle window resizing
+            window.addEventListener('resize', onWindowResize, false);
+        }
+        
+        // This is a simplified OrbitControls implementation to avoid extra dependencies
+        function initControls() {
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+
+            const onMouseDown = (e) => { isDragging = true; };
+            const onMouseUp = () => { isDragging = false; };
+            const onMouseMove = (e) => {
+                if (!isDragging) return;
+                const deltaMove = {
+                    x: e.offsetX - previousMousePosition.x,
+                    y: e.offsetY - previousMousePosition.y
+                };
+
+                const target = genePoints || dnaHelix;
+                if (target) {
+                    target.rotation.y += deltaMove.x * 0.005;
+                    target.rotation.x += deltaMove.y * 0.005;
+                }
+
+                previousMousePosition = { x: e.offsetX, y: e.offsetY };
+            };
+            
+            const onWheel = (e) => {
+                camera.position.z += e.deltaY * 0.01;
+                camera.position.z = Math.max(5, Math.min(50, camera.position.z)); // Clamp zoom
+            };
+
+            renderer.domElement.addEventListener('mousedown', onMouseDown);
+            renderer.domElement.addEventListener('mouseup', onMouseUp);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            renderer.domElement.addEventListener('wheel', onWheel);
+        }
+
+        function createDNAHelix() {
+            const group = new THREE.Group();
+            const radius = 5;
+            const height = 15;
+            const turns = 3;
+            const points = 100;
+
+            const sphereGeometry = new THREE.SphereGeometry(0.3, 16, 16);
+            const cylinderGeometry = new THREE.CylinderGeometry(0.1, 0.1, radius * 2, 8);
+
+            for (let i = 0; i < points; i++) {
+                const t = (i / points) * Math.PI * 2 * turns;
+                const y = (i / points) * height - height / 2;
+
+                // Strand 1
+                const x1 = radius * Math.cos(t);
+                const z1 = radius * Math.sin(t);
+                const mat1 = new THREE.MeshPhongMaterial({ color: 0x3182CE }); // blue-500
+                const sphere1 = new THREE.Mesh(sphereGeometry, mat1);
+                sphere1.position.set(x1, y, z1);
+                group.add(sphere1);
+
+                // Strand 2
+                const x2 = -x1;
+                const z2 = -z1;
+                const mat2 = new THREE.MeshPhongMaterial({ color: 0x48BB78 }); // green-500
+                const sphere2 = new THREE.Mesh(sphereGeometry, mat2);
+                sphere2.position.set(x2, y, z2);
+                group.add(sphere2);
+
+                // Rungs
+                if (i % 5 === 0) {
+                    const rung = new THREE.Mesh(cylinderGeometry, new THREE.MeshPhongMaterial({ color: 0xA0AEC0 })); // gray-400
+                    rung.position.set(0, y, 0);
+                    rung.lookAt(sphere1.position);
+                    rung.rotateOnWorldAxis(new THREE.Vector3(0,1,0), Math.PI / 2);
+                    group.add(rung);
+                }
+            }
+            return group;
+        }
+
+        function onWindowResize() {
+            camera.aspect = visualizationContainer.clientWidth / visualizationContainer.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(visualizationContainer.clientWidth, visualizationContainer.clientHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!genePoints && dnaHelix) {
+                dnaHelix.rotation.y += 0.005;
+            }
+            renderer.render(scene, camera);
+        }
+        
+        // --- Pipeline Logic ---
+
+        // Step 1: Load Data from File
+        fileUploadInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            
+            updateStatus('1', `Reading ${file.name}...`, 'loading');
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const csvData = e.target.result;
+                try {
+                    // Skip header row, then parse
+                    const parsed = csvData.split('\n').slice(1).map(row => {
+                        const columns = row.split(',');
+                        if (columns.length < 2) return null; // Skip empty or invalid rows
+                        return {
+                            gene: columns[0],
+                            values: columns.slice(1).map(Number).filter(n => !isNaN(n))
+                        };
+                    }).filter(Boolean); // Filter out null rows
+                    
+                    if(parsed.length === 0) throw new Error("No valid data rows found in CSV.");
+
+                    rawGeneData = parsed;
+                    updateStatus('1', `Loaded ${rawGeneData.length} gene records.`, 'success');
+                    setStepState('1', 'completed');
+                    setStepState('2', 'active');
+                    
+                    // Automatically run preprocessing
+                    preprocessData();
+                } catch (error) {
+                    updateStatus('1', `Error parsing file: ${error.message}`, 'error');
+                    setStepState('1', 'active');
+                }
+            };
+            reader.onerror = () => {
+                updateStatus('1', 'Error reading file.', 'error');
+                setStepState('1', 'active');
+            };
+            reader.readAsText(file);
+        });
+
+        // Step 2: Preprocess Data
+        function preprocessData() {
+            updateStatus('2', 'Normalizing data...', 'loading');
+            setTimeout(() => {
+                scaledGeneData = rawGeneData.map(d => {
+                    const values = d.values;
+                    if (values.length === 0) return [];
+                    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+                    const stdDev = Math.sqrt(values.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b, 0) / values.length);
+                    return stdDev === 0 ? values.map(() => 0) : values.map(v => (v - mean) / stdDev);
+                }).filter(arr => arr.length > 0);
+
+                updateStatus('2', 'Normalization complete.', 'success');
+                setStepState('2', 'completed');
+                setStepState('3', 'active');
+                runMlBtn.disabled = false;
+                runMlBtn.classList.replace('bg-gray-600', 'bg-green-600');
+                runMlBtn.classList.add('hover:bg-green-700');
+            }, 500);
+        }
+
+        // Step 3: Run K-Means
+        runMlBtn.addEventListener('click', () => {
+            const k = parseInt(kValueInput.value);
+            if (isNaN(k) || k < 2) {
+                // Using a custom modal instead of alert
+                showModal("Please enter a valid number of clusters (k >= 2).");
+                return;
+            }
+            updateStatus('3', `Running K-Means with k=${k}...`, 'loading');
+            
+            setTimeout(() => {
+                const clusters = kmeans(scaledGeneData, k);
+                const clusterAssignments = clusters.map(c => c.cluster);
+                
+                updateStatus('3', `Clustering complete.`, 'success');
+                setStepState('3', 'completed');
+                setStepState('4', 'active');
+
+                // Step 4: Visualize
+                visualizeClusters(clusterAssignments, k);
+            }, 500);
+        });
+
+        // Step 4: Visualize Clusters
+        function visualizeClusters(assignments, k) {
+            // Remove initial DNA helix
+            if (dnaHelix) {
+                scene.remove(dnaHelix);
+                dnaHelix = null;
+            }
+            // Remove old points if they exist
+            if (genePoints) {
+                scene.remove(genePoints);
+            }
+
+            genePoints = new THREE.Group();
+            const colors = generateColors(k);
+            
+            // Use first 3 data points as x,y,z for visualization (a simple form of dimensionality reduction)
+            const geometry = new THREE.SphereGeometry(0.2, 16, 16);
+            
+            assignments.forEach((clusterIndex, i) => {
+                if (scaledGeneData[i].length < 3) return; // Skip if not enough data for 3D plot
+                const material = new THREE.MeshPhongMaterial({ color: colors[clusterIndex] });
+                const point = new THREE.Mesh(geometry, material);
+                
+                // Scale positions for better visualization
+                const scale = 10;
+                point.position.set(
+                    scaledGeneData[i][0] * scale,
+                    scaledGeneData[i][1] * scale,
+                    scaledGeneData[i][2] * scale
+                );
+                genePoints.add(point);
+            });
+            
+            scene.add(genePoints);
+            displayClusterResults(assignments, k, colors);
+        }
+
+        // --- Helper Functions ---
+
+        function updateStatus(step, message, type) {
+            const statusEl = document.getElementById(`status-${step}`);
+            statusEl.innerHTML = ''; // Clear previous content
+            
+            if (type === 'loading') {
+                const loader = document.createElement('div');
+                loader.className = 'loader inline-block mr-2';
+                statusEl.appendChild(loader);
+            }
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = message;
+            
+            statusEl.className = 'text-sm mt-2 flex items-center';
+            if(type === 'success') statusEl.classList.add('text-green-400');
+            if(type === 'loading') statusEl.classList.add('text-blue-400');
+            if(type === 'error') statusEl.classList.add('text-red-400');
+            
+            statusEl.appendChild(textSpan);
+            statusEl.classList.remove('hidden');
+        }
+
+        function setStepState(step, state) { // state: 'active', 'completed'
+            const stepEl = document.getElementById(`step-${step}`);
+            stepEl.classList.remove('active', 'completed');
+            if (state) {
+                stepEl.classList.add(state);
+            }
+        }
+
+        function generateColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                colors.push(new THREE.Color(`hsl(${(i * 360) / count}, 70%, 60%)`));
+            }
+            return colors;
+        }
+
+        function displayClusterResults(assignments, k, colors) {
+            clusterResultsDiv.innerHTML = '<h3 class="font-semibold mb-2">Cluster Summary:</h3>';
+            const counts = new Array(k).fill(0);
+            assignments.forEach(a => counts[a]++);
+            
+            const ul = document.createElement('ul');
+            ul.className = 'space-y-1';
+            counts.forEach((count, i) => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center';
+                const colorBox = document.createElement('span');
+                colorBox.className = 'w-4 h-4 rounded-full inline-block mr-2';
+                colorBox.style.backgroundColor = `#${colors[i].getHexString()}`;
+                li.appendChild(colorBox);
+                li.append(`Cluster ${i}: ${count} genes`);
+                ul.appendChild(li);
+            });
+            clusterResultsDiv.appendChild(ul);
+        }
+
+        // --- Simple K-Means Implementation ---
+        function kmeans(data, k) {
+            // 1. Initialize centroids randomly
+            let centroids = data.slice(0, k).map(d => [...d]); // Deep copy
+
+            let assignments = [];
+            let changed = true;
+            let iterations = 0;
+
+            while (changed && iterations < 100) {
+                changed = false;
+                iterations++;
+
+                // 2. Assign points to the nearest centroid
+                assignments = data.map(point => {
+                    let minDistance = Infinity;
+                    let cluster = 0;
+                    centroids.forEach((centroid, i) => {
+                        const distance = euclideanDistance(point, centroid);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            cluster = i;
+                        }
+                    });
+                    return { point, cluster };
+                });
+
+                // 3. Recalculate centroids
+                const newCentroids = [];
+                for (let i = 0; i < k; i++) {
+                    const clusterPoints = assignments.filter(a => a.cluster === i).map(a => a.point);
+                    if (clusterPoints.length > 0) {
+                        const newCentroid = clusterPoints[0].map((_, colIndex) => 
+                            clusterPoints.reduce((sum, p) => sum + p[colIndex], 0) / clusterPoints.length
+                        );
+                        if (!centroids[i] || euclideanDistance(newCentroid, centroids[i]) > 0.001) {
+                            changed = true;
+                        }
+                        newCentroids.push(newCentroid);
+                    } else {
+                        // Re-initialize empty clusters
+                        newCentroids.push(data[Math.floor(Math.random() * data.length)]);
+                        changed = true;
+                    }
+                }
+                centroids = newCentroids;
+            }
+            return assignments;
+        }
+
+        function euclideanDistance(a, b) {
+            if (!a || !b || a.length !== b.length) return Infinity;
+            return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0));
+        }
+
+        // --- Initial Call ---
+        init3D();
+    </script>
+</body>
+</html>
